@@ -6,7 +6,7 @@ Projeto de aplicação cliente-servidor TCP em Go. O servidor recebe mensagens d
 
 ## Requisitos
 
-- **Go**: versão 1.25.4 ou superior
+- **Go**: versão [1.25.4](https://go.dev/dl/go1.25.4.windows-amd64.msi) ou superior
 - **Dependências**: gerenciadas automaticamente pelo Go modules
   - `go.uber.org/zap` (logging)
 
