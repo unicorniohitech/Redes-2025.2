@@ -9,6 +9,7 @@ import (
 
 	"tcp/utils"
 
+	"github.com/manifoldco/promptui"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +29,47 @@ func StartClient(config *Config) error {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
+		prompt := promptui.Select{
+			Label: "Selecione um comando ou digite manualmente",
+			Items: []string{"LIST", "LOOKUP", "INSERT", "UPDATE", "Digite manualmente"},
+		}
+
+		_, result, err := prompt.Run()
+		if err != nil {
+			fmt.Printf("Prompt failed %v\n", err)
+			return err
+		}
+
+		var message string
+
+		if result != "Digite manualmente" {
+			switch result {
+				case "LIST":
+					message = "LIST"
+				case "LOOKUP":
+					term := promptString("Digite o termo para busca:")
+					message = fmt.Sprintf("LOOKUP %s", term)
+				case "INSERT":
+					term := promptString("Termo:")
+					def := promptString("Definição:")
+					message = fmt.Sprintf("INSERT %s %s", term, def)
+				case "UPDATE":
+					term := promptString("Termo:")
+					def := promptString("Nova definição:")
+					message = fmt.Sprintf("UPDATE %s %s", term, def)
+				}
+
+		} else {
+			logger.Info("Enter message to send (or Ctrl+C to quit):")
+			if !scanner.Scan() {
+				break
+			}
+			message = scanner.Text()
+			if message == "" {
+				continue
+			}
+		}
+
 		if !connOK {
 			logger.Warn("Connection to server lost. Trying to reconnect.")
 			conn, err = net.Dial("tcp", config.AddressString())
@@ -40,23 +82,7 @@ func StartClient(config *Config) error {
 			connOK = true
 			tryCount = 0
 		}
-		logger.Info("Enter message to send (or Ctrl+C to quit):")
-		if !scanner.Scan() {
-			break
-		}
 
-		message := scanner.Text()
-		if message == "" {
-			continue
-		}
-
-		/*
-			==================================================
-			Here you can implement any data processing logic
-			before sending. Use functions from client/utils.go
-			as needed.
-			==================================================
-		*/
 		request, err := ParseCommandToHTTPRequest(message)
 		if err != nil {
 			logger.Warn("Invalid command format", zap.Error(err))
@@ -69,21 +95,11 @@ func StartClient(config *Config) error {
 			continue
 		}
 
-		/*
-			==================================================
-			End of data processing logic.
-			==================================================
-		*/
-
 		_, err = conn.Write(request.Bytes())
 		if err != nil {
 			logger.Warn("Error sending data", zap.Error(err))
 			return err
 		}
-		// logger.Info("Sent request",
-		// 	zap.String("method", request.Method),
-		// 	zap.String("path", request.Path),
-		// 	zap.String("body", request.Body))
 
 		buffer := make([]byte, 1024)
 		err = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -104,25 +120,30 @@ func StartClient(config *Config) error {
 		}
 
 		responseStr := string(buffer[:n])
-		// logger.Info("Received response", zap.String("response", responseStr))
-
-		statusCode, statusText, message := ParseHTTPResponse(responseStr)
-
-		// logger.Info("Received response",
-		// 	zap.Int("status_code", statusCode),
-		// 	zap.String("status", statusText),
-		// 	zap.String("message", message))
+		statusCode, statusText, body := ParseHTTPResponse(responseStr)
 
 		if statusCode >= 200 && statusCode < 300 {
-			fmt.Printf("%s SUCCESS (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, message)
+			fmt.Printf("%s SUCCESS (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, body)
 		} else if statusCode >= 400 && statusCode < 500 {
-			fmt.Printf("%s CLIENT ERROR (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, message)
+			fmt.Printf("%s CLIENT ERROR (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, body)
 		} else if statusCode >= 500 {
-			fmt.Printf("%s SERVER ERROR (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, message)
+			fmt.Printf("%s SERVER ERROR (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, body)
 		} else {
-			fmt.Printf("%s RESPONSE (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, message)
+			fmt.Printf("%s RESPONSE (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, body)
 		}
 	}
 
 	return nil
+}
+
+func promptString(label string) string {
+	prompt := promptui.Prompt{
+		Label: label,
+	}
+	result, err := prompt.Run()
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return ""
+	}
+	return result
 }
