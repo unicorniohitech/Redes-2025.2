@@ -6,7 +6,7 @@ Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sist
 
 ## Requisitos
 
-- **Go**: versão 1.25.4 ou superior.
+- **Go**: versão [1.25.4](https://go.dev/doc/install) ou superior.
   - *[Windows](https://go.dev/dl/go1.25.4.windows-amd64.msi)*
   - *[Linux](https://go.dev/dl/go1.25.4.linux-amd64.tar.gz)*
   - *[MacOS](https://go.dev/dl/)*
