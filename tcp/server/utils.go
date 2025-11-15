@@ -43,8 +43,9 @@ func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.
 			zap.String("method", request.Method),
 			zap.String("path", request.Path),
 			zap.Int("status_code", response.StatusCode),
-			zap.Duration("elapsed_time", elapsed))
+			zap.Int64("elapsed_time", elapsed.Nanoseconds()))
 		logger.Info("Response", zap.Int("status_code", response.StatusCode), zap.String("message", response.Message))
+		time.Sleep(5 * time.Nanosecond)
 	}()
 
 	command := request.Method
@@ -52,7 +53,7 @@ func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.
 
 	switch command {
 	case "LIST":
-		for mux.TryLock() == false {
+		for !mux.TryLock() {
 			if time.Since(startTime) > 30*time.Second {
 				response = utils.HTTPResponse{
 					StatusCode: http.StatusRequestTimeout,
@@ -72,7 +73,7 @@ func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.
 		return response
 
 	case "LOOKUP":
-		for mux.TryLock() == false {
+		for !mux.TryLock() {
 			if time.Since(startTime) > 30*time.Second {
 				response = utils.HTTPResponse{
 					StatusCode: http.StatusRequestTimeout,
@@ -107,7 +108,7 @@ func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.
 			return response
 		}
 
-		for mux.TryLock() == false {
+		for !mux.TryLock() {
 			if time.Since(startTime) > 30*time.Second {
 				response = utils.HTTPResponse{
 					StatusCode: http.StatusRequestTimeout,
@@ -143,7 +144,7 @@ func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.
 			return response
 		}
 
-		for mux.TryLock() == false {
+		for !mux.TryLock() {
 			if time.Since(startTime) > 30*time.Second {
 				response = utils.HTTPResponse{
 					StatusCode: http.StatusRequestTimeout,
