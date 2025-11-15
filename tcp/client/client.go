@@ -29,6 +29,19 @@ func StartClient(config *Config) error {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
+		if !connOK {
+			logger.Warn("Connection to server lost. Trying to reconnect.")
+			conn, err = net.Dial("tcp", config.AddressString())
+			if err != nil {
+				logger.Warn("Error reconnecting to server", zap.Error(err))
+				tryCount++
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			connOK = true
+			tryCount = 0
+		}
+
 		prompt := promptui.Select{
 			Label: "Selecione um comando ou digite manualmente",
 			Items: []string{"LIST", "LOOKUP", "INSERT", "UPDATE", "Digite manualmente"},
@@ -44,21 +57,20 @@ func StartClient(config *Config) error {
 
 		if result != "Digite manualmente" {
 			switch result {
-				case "LIST":
-					message = "LIST"
-				case "LOOKUP":
-					term := promptString("Digite o termo para busca:")
-					message = fmt.Sprintf("LOOKUP %s", term)
-				case "INSERT":
-					term := promptString("Termo:")
-					def := promptString("Definição:")
-					message = fmt.Sprintf("INSERT %s %s", term, def)
-				case "UPDATE":
-					term := promptString("Termo:")
-					def := promptString("Nova definição:")
-					message = fmt.Sprintf("UPDATE %s %s", term, def)
-				}
-
+			case "LIST":
+				message = "LIST"
+			case "LOOKUP":
+				term := promptString("Digite o termo para busca:")
+				message = fmt.Sprintf("LOOKUP %s", term)
+			case "INSERT":
+				term := promptString("Termo:")
+				def := promptString("Definição:")
+				message = fmt.Sprintf("INSERT %s %s", term, def)
+			case "UPDATE":
+				term := promptString("Termo:")
+				def := promptString("Nova definição:")
+				message = fmt.Sprintf("UPDATE %s %s", term, def)
+			}
 		} else {
 			logger.Info("Enter message to send (or Ctrl+C to quit):")
 			if !scanner.Scan() {
@@ -68,19 +80,6 @@ func StartClient(config *Config) error {
 			if message == "" {
 				continue
 			}
-		}
-
-		if !connOK {
-			logger.Warn("Connection to server lost. Trying to reconnect.")
-			conn, err = net.Dial("tcp", config.AddressString())
-			if err != nil {
-				logger.Warn("Error reconnecting to server", zap.Error(err))
-				tryCount++
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			connOK = true
-			tryCount = 0
 		}
 
 		request, err := ParseCommandToHTTPRequest(message)
@@ -101,12 +100,12 @@ func StartClient(config *Config) error {
 			return err
 		}
 
-		buffer := make([]byte, 1024)
 		err = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err != nil {
 			logger.Warn("Error setting up read deadline", zap.Error(err))
 			return err
 		}
+		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
 			logger.Warn("Error reading response", zap.Error(err))
