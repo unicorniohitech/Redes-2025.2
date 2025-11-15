@@ -6,7 +6,13 @@ Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sist
 
 ## Requisitos
 
-- **Go**: versão [1.25.4](https://go.dev/dl/go1.25.4.windows-amd64.msi) ou superior
+- **Go**: versão 1.25.4 ou superior.
+  - *[Windows](https://go.dev/dl/go1.25.4.windows-amd64.msi)*
+  - *[Linux](https://go.dev/dl/go1.25.4.linux-amd64.tar.gz)*
+  - *[MacOS](https://go.dev/dl/)*
+    - *[ARM64](https://go.dev/dl/go1.25.4.darwin-arm64.pkg)*
+    - *[x86-64](https://go.dev/dl/go1.25.4.darwin-amd64.pkg)*
+  - *[Source](https://go.dev/dl/go1.25.4.src.tar.gz)*
 - **Dependências**: gerenciadas automaticamente pelo Go modules
   - `go.uber.org/zap` (logging)
 
