@@ -9,6 +9,9 @@ import (
 	"go.uber.org/zap"
 )
 
+var dict = NewDictionary()
+var dictMutex sync.Mutex
+
 func StartServer(config *Config) error {
 	logger := utils.GetLogger()
 	wg := &sync.WaitGroup{}
@@ -48,7 +51,7 @@ func handleConnection(conn net.Conn, logger *zap.Logger, wg *sync.WaitGroup) {
 			return
 		}
 		data := buffer[:n]
-		logger.Info("Received data", zap.String("data", string(data)))
+		logger.Info("Received data", zap.ByteString("data", data))
 		wg.Add(1)
 		go processData(data, conn, logger, wg)
 	}
@@ -56,7 +59,23 @@ func handleConnection(conn net.Conn, logger *zap.Logger, wg *sync.WaitGroup) {
 
 func processData(data []byte, conn net.Conn, logger *zap.Logger, wg *sync.WaitGroup) {
 	defer wg.Done()
-	logger.Info("Processing data", zap.String("data", string(data)))
+	logger.Info("Processing data", zap.ByteString("data", data))
+
+	request, err := utils.ParseHTTPRequest(data)
+	if err != nil {
+		response := utils.HTTPResponse{
+			StatusCode: 400,
+			Message:    "Invalid request format: " + err.Error(),
+		}
+		logger.Warn("Invalid request", zap.Error(err))
+		conn.Write(response.Bytes())
+		return
+	}
+
+	logger.Info("Parsed request",
+		zap.String("method", request.Method),
+		zap.String("path", request.Path),
+		zap.String("body", request.Body))
 
 	/*
 		==================================================
@@ -64,7 +83,7 @@ func processData(data []byte, conn net.Conn, logger *zap.Logger, wg *sync.WaitGr
 		Use functions from server/utils.go as needed.
 		==================================================
 	*/
-	processedData := []byte(ToUppercase(string(data)))
+	response := ProcessDictCommand(request, dict, &dictMutex)
 
 	/*
 		==================================================
@@ -72,7 +91,7 @@ func processData(data []byte, conn net.Conn, logger *zap.Logger, wg *sync.WaitGr
 		==================================================
 	*/
 
-	_, err := conn.Write(processedData)
+	_, err = conn.Write(response.Bytes())
 	if err != nil {
 		logger.Warn("Error writing to connection", zap.Error(err))
 	}

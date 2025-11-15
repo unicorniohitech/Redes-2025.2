@@ -2,7 +2,7 @@
 
 ## Descrição
 
-Projeto de aplicação cliente-servidor TCP em Go. O servidor recebe mensagens dos clientes, processa os dados (convertendo para maiúsculas) e retorna a resposta. O cliente envia mensagens (convertidas para minúsculas) e exibe as respostas do servidor.
+Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sistema de dicionário distribuído com comandos LOOKUP, INSERT e UPDATE. A comunicação utiliza estruturas `HTTPRequest` e `HTTPResponse` personalizadas, com códigos de status HTTP apropriados.
 
 ## Requisitos
 
@@ -59,12 +59,46 @@ go run main.go -mode=client -address=localhost -port=9000
 
 ### Uso do Cliente
 
-Após conectar, digite mensagens no terminal do cliente:
+Após conectar, digite comandos no terminal do cliente:
 
-1. Digite uma mensagem e pressione Enter
-2. A mensagem será enviada ao servidor (convertida para minúsculas)
-3. O servidor responderá com a mensagem em maiúsculas
-4. Para encerrar, pressione `Ctrl+C`
+#### Comandos Disponíveis
+
+- **`LIST`** - Lista todos os termos cadastrados
+- **`LOOKUP <termo>`** - Consulta a definição de um termo
+- **`INSERT <termo> <definição>`** - Insere um novo termo no dicionário
+- **`UPDATE <termo> <nova_definição>`** - Atualiza a definição de um termo existente
+
+#### Formato de Comunicação
+
+**HTTPRequest (Cliente → Servidor):**
+
+```bash
+METHOD /term\r\n
+Body: definition\r\n
+\r\n
+```
+
+**HTTPResponse (Servidor → Cliente):**
+
+```bash
+<StatusCode> <StatusText>: <Message>
+```
+
+#### Respostas HTTP
+
+Todas as respostas seguem o formato: `<StatusCode> <StatusText>: <Message>`
+
+**Códigos de Status:**
+
+- `200 OK` - Operação bem-sucedida (LOOKUP, UPDATE)
+- `201 Created` - Termo inserido com sucesso
+- `400 Bad Request` - Formato de comando inválido
+- `404 Not Found` - Termo não encontrado
+- `408 Request Timeout` - Timeout ao acessar o dicionário
+- `409 Conflict` - Termo já existe (INSERT)
+- `501 Not Implemented` - Comando desconhecido
+
+Para encerrar, pressione `Ctrl+C`
 
 ## Parâmetros de Linha de Comando
 
@@ -92,9 +126,25 @@ go run main.go -mode=client -port=8080
 
 ```bash
 Enter message to send (or Ctrl+C to quit):
-Olá Mundo
-# Cliente envia: "olá mundo"
-# Servidor responde: "OLÁ MUNDO"
+INSERT golang A programming language
+# Cliente envia: INSERT /golang\r\nBody: A programming language\r\n\r\n
+# Servidor responde: 201 Created: Term 'golang' inserted successfully
+
+LOOKUP golang
+# Cliente envia: LOOKUP /golang\r\n\r\n
+# Servidor responde: 200 OK: A programming language
+
+UPDATE golang A statically typed programming language
+# Cliente envia: UPDATE /golang\r\nBody: A statically typed programming language\r\n\r\n
+# Servidor responde: 200 OK: Term 'golang' updated successfully
+
+LOOKUP python
+# Cliente envia: LOOKUP /python\r\n\r\n
+# Servidor responde: 404 Not Found: Term 'python' not found
+
+LIST
+# Cliente envia: LIST
+# Servidor responde: 200 OK: [golang]
 ```
 
 ## Estrutura do Projeto
