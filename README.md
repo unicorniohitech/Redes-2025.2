@@ -1,32 +1,60 @@
-# Redes-2025.2
+# 🌐 Redes 2025.2
 
-Repositório de projetos para a disciplina de Redes 2025.2.
+Repositório de projetos desenvolvidos para a disciplina **Redes de Computadores** (Período: 2025.2).
 
-## Projetos
+## 📌 Visão Geral
 
-Este repositório contém implementações de comunicação cliente-servidor utilizando diferentes protocolos de transporte.
+Este repositório reúne implementações de sistemas cliente-servidor que simulam comunicação em rede utilizando diferentes protocolos de transporte, como TCP e UDP. Os projetos têm como objetivo exercitar o entendimento prático dos conceitos de redes, incluindo:
+
+- Estabelecimento de conexão
+- Envio e recebimento de mensagens
+- Controle de fluxo
+- Confiabilidade x desempenho
+
+Cada projeto é modular e pode ser executado de forma independente, facilitando estudos e apresentação dos resultados.
+
+## 🚀 Tecnologias Utilizadas
+
+### Linguagens e Ferramentas
+- **Go**: linguagem utilizada no desenvolvimento do cliente e servidor TCP  
+  (versão recomendada: `v1.25.4` ou superior)
+- **Terminal / CLI**: execução dos programas via linha de comando
+- **PromptUI** (no cliente TCP): interação mais intuitiva na interface do cliente
+- **git / GitHub**: versionamento e organização do código
+
+### Protocolos Implementados
+- **TCP (Transmission Control Protocol)**:
+  - Comunicação orientada à conexão
+  - Entrega confiável de dados
+- **UDP (User Datagram Protocol)**:
+  - Comunicação sem conexão
+  - Alta velocidade com menor overhead (em desenvolvimento)
+
+## 📁 Projetos
 
 ### 📡 [TCP](./tcp)
 
-Implementação de aplicação cliente-servidor utilizando protocolo TCP (Transmission Control Protocol).
+- Implementação cliente-servidor com troca de mensagens
+- Interface CLI interativa
+- Suporte para diferentes modos de operação
 
-- **Linguagem**: Go
-- **Características**: Conexão confiável, controle de fluxo, garantia de entrega
-- **Funcionalidade**: Cliente envia mensagens que são processadas e retornadas pelo servidor
+🔗 **[Ver instruções detalhadas →](./tcp/README.md)**
 
-**[📖 Ver instruções completas →](./tcp/README.md)**
+---
 
 ### 📦 UDP
 
-Implementação de aplicação cliente-servidor utilizando protocolo UDP (User Datagram Protocol).
+- Projeto em desenvolvimento
+- Comunicação leve e sem conexão
+- Aguardando definição de requisitos
 
-- **Linguagem**: A definir
-- **Características**: Comunicação sem conexão, baixa latência
-- **Status**: Em desenvolvimento
+🔗 **[Ver instruções →](./udp/README.md)** *(em breve)*
 
-**[📖 Ver instruções →](./udp/README.md)** *(em breve)*
+---
 
-## Estrutura do Repositório
+## 🗂️ Estrutura do Repositório
+
+
 
 ```
 Redes-2025.2/
@@ -40,18 +68,22 @@ Redes-2025.2/
 └── README.md         # Este arquivo
 ```
 
-## Como Usar
+## 🛠️ Como Executar o Projeto TCP
 
-1. Navegue até a pasta do projeto desejado
-2. Siga as instruções específicas no README.md de cada projeto
-3. Execute o servidor e o cliente conforme documentado
-
-## Requisitos Gerais
-
-- **TCP**: Go 1.25.4 ou superior
-- **UDP**: A definir
-
----
-
-**Disciplina**: Redes de Computadores  
-**Período**: 2025.2
+> 🔧 Pré-requisito: Go 1.25.4 ou superior
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/unicorniohitech/Redes-2025.2.git
+   ```
+2. Acesse o diretório `tcp`:
+   ```bash
+   cd tcp
+   ```
+3. Para iniciar o servidor, execute:
+   ```bash
+   go run main.go -mode=server
+   ```
+4. Em outro terminal, inicie o cliente:
+   ```bash
+   go run main.go -mode=client
+   ```
