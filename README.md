@@ -75,15 +75,19 @@ Redes-2025.2/
    ```bash
    git clone https://github.com/unicorniohitech/Redes-2025.2.git
    ```
-2. Acesse o diretório `tcp`:
+2. Instale as dependências:
+   ```bash
+   go mod download
+   ```
+3. Acesse o diretório `tcp`:
    ```bash
    cd tcp
    ```
-3. Para iniciar o servidor, execute:
+4. Para iniciar o servidor, execute:
    ```bash
    go run main.go -mode=server
    ```
-4. Em outro terminal, inicie o cliente:
+5. Em outro terminal, inicie o cliente:
    ```bash
    go run main.go -mode=client
    ```
