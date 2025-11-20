@@ -113,8 +113,6 @@ func StartClient(config *Config) error {
 			fmt.Printf("%s RESPONSE (%d %s): %s\n", utils.GetEmoji(statusCode), statusCode, statusText, body)
 		}
 	}
-
-	return nil
 }
 
 func promptString(label string) string {

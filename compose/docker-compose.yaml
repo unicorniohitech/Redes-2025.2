@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  tcp-server:
+    build:
+      context: ../tcp
+      dockerfile: Dockerfile
+    image: redes-tcp:latest
+    command: ["-mode=server", "-address=0.0.0.0", "-port=8000"]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

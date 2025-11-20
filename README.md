@@ -16,6 +16,7 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 ## 🚀 Tecnologias Utilizadas
 
 ### Linguagens e Ferramentas
+
 - **Go**: linguagem utilizada no desenvolvimento do cliente e servidor TCP  
   (versão recomendada: `v1.25.4` ou superior)
 - **Terminal / CLI**: execução dos programas via linha de comando
@@ -23,6 +24,7 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 - **git / GitHub**: versionamento e organização do código
 
 ### Protocolos Implementados
+
 - **TCP (Transmission Control Protocol)**:
   - Comunicação orientada à conexão
   - Entrega confiável de dados
@@ -54,9 +56,7 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 
 ## 🗂️ Estrutura do Repositório
 
-
-
-```
+```txt
 Redes-2025.2/
 ├── tcp/              # Projeto TCP
 │   ├── main.go
@@ -70,24 +70,60 @@ Redes-2025.2/
 
 ## 🛠️ Como Executar o Projeto TCP
 
-> 🔧 Pré-requisito: Go 1.25.4 ou superior
-1. Clone o repositório:
+> 🔧 Pré-requisito: Docker (para o servidor) e Go (para o cliente quando executado pelos scripts)
+
+1. Clone o repositório (se ainda não fez):
+
    ```bash
    git clone https://github.com/unicorniohitech/Redes-2025.2.git
+   cd Redes-2025.2
    ```
-2. Instale as dependências:
+
+2. Iniciar o servidor via Docker Compose (recomendado)
+   - Entre na pasta `compose` e suba o serviço do servidor:
+
    ```bash
-   go mod download
+   cd compose
+   docker compose up --build -d
    ```
-3. Acesse o diretório `tcp`:
+
+   - O servidor ficará disponível em `localhost:8000` (conforme configuração do `compose/docker-compose.yaml`).
+   - Para parar o servidor:
+
+   ```bash
+   docker compose down
+   ```
+
+3. Iniciar o cliente usando os scripts fornecidos (sem Docker)
+   - Os scripts estão em `client/` e aceitam dois parâmetros opcionais: `HOST` e `PORT` (valores padrão: `localhost` e `8000`).
+
+   - Linux / macOS / WSL (Bash):
+
+   ```bash
+   cd client
+   ./run_client.sh            # usa localhost:8000
+   ./run_client.sh 127.0.0.1 8000
+   ```
+
+   - Windows (cmd / PowerShell):
+
+   ```cmd
+   cd client
+   run_client.bat             # usa localhost:8000
+   run_client.bat 127.0.0.1 8000
+   ```
+
+   - O script tenta executar o binário `tcp/bin/tcp` se existir; caso contrário, ele compila o projeto (`go build`) para `tcp/bin/tcp` e então executa o cliente.
+   - Por isso, o script requer o `go` disponível no PATH para compilar na primeira execução.
+
+4. Alternativa: executar direto com Go
+   - Se preferir executar sem os scripts, use diretamente o comando `go run` no módulo `tcp`:
+
    ```bash
    cd tcp
+   go run main.go -mode=server           # servidor
+   go run main.go -mode=client           # cliente (ou use os scripts)
    ```
-4. Para iniciar o servidor, execute:
-   ```bash
-   go run main.go -mode=server
-   ```
-5. Em outro terminal, inicie o cliente:
-   ```bash
-   go run main.go -mode=client
-   ```
+
+5. Observações
+   - Em sistemas Windows/macOS com Docker Desktop, se você executar clientes em contêineres, pode ser necessário usar `host.docker.internal` para alcançar o `localhost` do host; os scripts locais lidam com execução direta no host e não dependem de mapeamentos de rede do Docker.

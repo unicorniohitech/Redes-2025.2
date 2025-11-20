@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"tcp/client"
 	"tcp/server"
@@ -16,10 +17,26 @@ func main() {
 	logger := utils.GetLogger()
 	defer logger.Sync()
 
+	// Allow environment variables to override defaults (passed from docker-compose via -e)
+	envHost := os.Getenv("HOST")
+	envPort := os.Getenv("PORT")
+
+	// compute defaults
+	addrDefault := "localhost"
+	if envHost != "" {
+		addrDefault = envHost
+	}
+	portDefault := 8000
+	if envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil {
+			portDefault = p
+		}
+	}
+
 	// Define flags
 	mode := flag.String("mode", "", "Mode to run: 'server' or 'client'")
-	address := flag.String("address", "localhost", "Address to bind/connect to")
-	port := flag.Int("port", 8000, "Port to bind/connect to")
+	address := flag.String("address", addrDefault, "Address to bind/connect to")
+	port := flag.Int("port", portDefault, "Port to bind/connect to")
 
 	flag.Parse()
 
