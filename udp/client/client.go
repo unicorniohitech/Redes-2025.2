@@ -67,9 +67,9 @@ func StartClient(config *Config) error {
 
 		logger.Info("Connected to server", zap.String("address", config.AddressString()))
 
-		for i := range requestPacket {
-			logger.Info("Sending packet", zap.Int("packet_index", i), zap.ByteString("payload", requestPacket[i].Payload))
-			_, err = conn.Write(requestPacket[i].Bytes())
+		for i, p := range requestPacket {
+			logger.Info("Sending packet", zap.Int("packet_index", i), zap.ByteString("payload", p.Payload))
+			_, err = conn.Write(p.Bytes())
 			if err != nil {
 				logger.Warn("Error sending data to server", zap.Error(err))
 				conn.Close()

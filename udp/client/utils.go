@@ -6,6 +6,11 @@ import (
 	"udp/utils"
 )
 
+type Dictionary struct {
+	terms map[string]string
+	keys  []string
+}
+
 func ToLowercase(data string) string {
 	return strings.ToLower(data)
 }

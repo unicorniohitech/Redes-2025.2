@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"udp/client"
 	"udp/server"
@@ -43,7 +44,7 @@ func main() {
 	// Validate mode
 	if *mode == "" {
 		fmt.Println("Error: mode flag is required")
-		fmt.Println("Usage: go run main.go -mode=<server|client> [-address=<address>] [-port=<port>]")
+		fmt.Println("Usage: go run main.go -mode=<server|client|teste> [-address=<address>] [-port=<port>]")
 		os.Exit(1)
 	}
 
@@ -66,9 +67,15 @@ func main() {
 		logger.Info("Starting UDP client", zap.String("address", config.AddressString()))
 		client.StartClient(config)
 
+	case "teste":
+		logger.Info("Starting test client", zap.String("address", *address), zap.Int("port", *port))
+		if err := client.RunTestClient(*address, *port, 1*time.Second); err != nil {
+			logger.Fatal("Failed to run test client", zap.Error(err))
+		}
+
 	default:
 		fmt.Printf("Error: invalid mode '%s'\n", *mode)
-		fmt.Println("Mode must be either 'server' or 'client'")
+		fmt.Println("Mode must be either 'server', 'client', or 'teste'")
 		os.Exit(1)
 	}
 }
