@@ -21,5 +21,5 @@ FROM scratch
 # Copy the statically linked binary
 COPY --from=build /app/main /app/main
 
-EXPOSE 8000
+EXPOSE 8080
 ENTRYPOINT ["/app/main"]

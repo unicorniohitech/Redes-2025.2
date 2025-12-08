@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   tcp-server:
     build:
@@ -9,4 +7,14 @@ services:
     command: ["-mode=server", "-address=0.0.0.0", "-port=8000"]
     ports:
       - "8000:8000"
+    restart: unless-stopped
+    
+  udp-server:
+    build:
+      context: ../udp
+      dockerfile: Dockerfile
+    image: redes-udp:latest
+    command: ["-mode=server", "-address=0.0.0.0", "-port=8080"]
+    ports:
+      - "8080:8080"
     restart: unless-stopped

@@ -50,7 +50,7 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 - Comunicação leve e sem conexão
 - Aguardando definição de requisitos
 
-🔗 **[Ver instruções →](./udp/README.md)** *(em breve)*
+🔗 **[Ver instruções →](./udp/README.md)**
 
 ---
 

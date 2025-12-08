@@ -2,222 +2,180 @@ package server
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
+	"udp/utils"
+
+	"go.uber.org/zap"
 )
 
-// Response represents a server response
-type Response struct {
-	StatusCode int
-	Message    string
+var logger = utils.GetLogger()
+
+func ToUppercase(data string) string {
+	return strings.ToUpper(data)
 }
 
-// ProcessDictCommand processes a dictionary command and returns a response
-func ProcessDictCommand(command string, dict *Dictionary, mutex *sync.RWMutex) *Response {
-	if command == "" {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Empty command",
-		}
-	}
+/*
+	Atividade 1: Equipe 10
+	Implemente um sistema distribuído cliente-servidor usando Sockets TCP que gerencie
+	um dicionário de termos (poucos exemplos, e.g., 5) e definições compartilhado em memória. O servi-
+	dor deve aceitar múltiplas conexões e permitir que clientes consultem, insiram e atualizem definições.
 
-	// Parse command
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Invalid command format",
-		}
-	}
+	O TCP é usado para garantir a entrega ordenada dos comandos e a integridade das modificações.
+	O cliente pode consultar a definição de um termo usando o comando LOOKUP <termo>. Para
+	modificar o dicionário, o cliente pode inserir um novo termo (INSERT <termo> <definição>), ou
+	modificar o dicionário, o cliente falhando se o termo já existir, ou modificar a definição de um termo
+	existente usando o comando UPDATE <termo> <nova_definição>. É fundamental implementar
+	mecanismos de bloqueio (locks ou mutexes) no servidor para garantir que a modificação de um termo
+	por um cliente não seja interrompida ou sobreposta por outro cliente que tente modificar o mesmo
+	termo simultaneamente, assegurando a integridade transacional dos dados.
+*/
 
-	method := strings.ToUpper(parts[0])
+func ProcessDictCommand(request *utils.HTTPRequest, dict *Dictionary, mux *sync.Mutex) utils.HTTPResponse {
+	startTime := time.Now()
+	var response utils.HTTPResponse
 
-	switch method {
+	defer func() {
+		elapsed := time.Since(startTime)
+		logger.Info("Processed command",
+			zap.String("method", request.Method),
+			zap.String("path", request.Path),
+			zap.Int("status_code", response.StatusCode),
+			zap.Int64("elapsed_time", elapsed.Nanoseconds()))
+		logger.Info("Response", zap.Int("status_code", response.StatusCode), zap.String("message", response.Message))
+		time.Sleep(5 * time.Nanosecond)
+	}()
+
+	command := request.Method
+	term := request.Path
+
+	switch command {
 	case "LIST":
-		return handleList(dict, mutex)
+		for !mux.TryLock() {
+			if time.Since(startTime) > 30*time.Second {
+				response = utils.HTTPResponse{
+					StatusCode: http.StatusRequestTimeout,
+					Message:    "Timeout while trying to access dictionary",
+				}
+				return response
+			}
+		}
+		terms := dict.List()
+		mux.Unlock()
+		keys := "[" + strings.Join(terms, ", ") + "]"
+
+		response = utils.HTTPResponse{
+			StatusCode: http.StatusOK,
+			Message:    keys,
+		}
+		return response
 
 	case "LOOKUP":
-		if len(parts) < 2 {
-			return &Response{
-				StatusCode: 400,
-				Message:    "Usage: LOOKUP <term>",
+		for !mux.TryLock() {
+			if time.Since(startTime) > 30*time.Second {
+				response = utils.HTTPResponse{
+					StatusCode: http.StatusRequestTimeout,
+					Message:    "Timeout while trying to access dictionary",
+				}
+				return response
 			}
 		}
-		term := parts[1]
-		return handleLookup(term, dict, mutex)
+		definition, exists := dict.LookUp(term)
+		mux.Unlock()
+
+		if !exists {
+			response = utils.HTTPResponse{
+				StatusCode: http.StatusNotFound,
+				Message:    fmt.Sprintf("Term '%s' not found", term),
+			}
+			return response
+		}
+
+		response = utils.HTTPResponse{
+			StatusCode: http.StatusOK,
+			Message:    definition,
+		}
+		return response
 
 	case "INSERT":
-		if len(parts) < 3 {
-			return &Response{
-				StatusCode: 400,
-				Message:    "Usage: INSERT <term> <definition>",
+		if request.Body == "" {
+			response = utils.HTTPResponse{
+				StatusCode: http.StatusBadRequest,
+				Message:    "INSERT command requires a body (definition)",
+			}
+			return response
+		}
+
+		for !mux.TryLock() {
+			if time.Since(startTime) > 30*time.Second {
+				response = utils.HTTPResponse{
+					StatusCode: http.StatusRequestTimeout,
+					Message:    "Timeout while trying to access dictionary",
+				}
+				return response
 			}
 		}
-		term := parts[1]
-		// Join remaining parts as definition (allow spaces)
-		definition := strings.Join(parts[2:], " ")
-		return handleInsert(term, definition, dict, mutex)
+		defer mux.Unlock()
+
+		success := dict.Insert(term, request.Body)
+
+		if !success {
+			response = utils.HTTPResponse{
+				StatusCode: http.StatusConflict,
+				Message:    fmt.Sprintf("Term '%s' already exists", term),
+			}
+			return response
+		}
+
+		response = utils.HTTPResponse{
+			StatusCode: http.StatusCreated,
+			Message:    fmt.Sprintf("Term '%s' inserted successfully", term),
+		}
+		return response
 
 	case "UPDATE":
-		if len(parts) < 3 {
-			return &Response{
-				StatusCode: 400,
-				Message:    "Usage: UPDATE <term> <new_definition>",
+		if request.Body == "" {
+			response = utils.HTTPResponse{
+				StatusCode: http.StatusBadRequest,
+				Message:    "UPDATE command requires a body (new definition)",
+			}
+			return response
+		}
+
+		for !mux.TryLock() {
+			if time.Since(startTime) > 30*time.Second {
+				response = utils.HTTPResponse{
+					StatusCode: http.StatusRequestTimeout,
+					Message:    "Timeout while trying to access dictionary",
+				}
+				return response
 			}
 		}
-		term := parts[1]
-		// Join remaining parts as definition (allow spaces)
-		definition := strings.Join(parts[2:], " ")
-		return handleUpdate(term, definition, dict, mutex)
+		defer mux.Unlock()
+
+		success := dict.Update(term, request.Body)
+
+		if !success {
+			response = utils.HTTPResponse{
+				StatusCode: http.StatusNotFound,
+				Message:    fmt.Sprintf("Term '%s' does not exist", term),
+			}
+			return response
+		}
+
+		response = utils.HTTPResponse{
+			StatusCode: http.StatusOK,
+			Message:    fmt.Sprintf("Term '%s' updated successfully", term),
+		}
+		return response
 
 	default:
-		return &Response{
-			StatusCode: 400,
-			Message:    fmt.Sprintf("Unknown command: %s", method),
+		response = utils.HTTPResponse{
+			StatusCode: http.StatusNotImplemented,
+			Message:    fmt.Sprintf("Unknown command '%s'. Try one of: LIST, LOOKUP, INSERT, UPDATE", command),
 		}
+		return response
 	}
-}
-
-// handleList returns all terms in the dictionary
-func handleList(dict *Dictionary, mutex *sync.RWMutex) *Response {
-	mutex.RLock()
-	defer mutex.RUnlock()
-
-	terms := dict.List()
-	if len(terms) == 0 {
-		return &Response{
-			StatusCode: 200,
-			Message:    "[empty]",
-		}
-	}
-
-	// Format as newline-separated list
-	message := strings.Join(terms, "\n")
-	return &Response{
-		StatusCode: 200,
-		Message:    message,
-	}
-}
-
-// handleLookup searches for a term in the dictionary
-func handleLookup(term string, dict *Dictionary, mutex *sync.RWMutex) *Response {
-	mutex.RLock()
-	defer mutex.RUnlock()
-
-	definition, exists := dict.LookUp(term)
-	if !exists {
-		return &Response{
-			StatusCode: 404,
-			Message:    fmt.Sprintf("Term not found: %s", term),
-		}
-	}
-
-	return &Response{
-		StatusCode: 200,
-		Message:    definition,
-	}
-}
-
-// handleInsert inserts a new term into the dictionary
-func handleInsert(term, definition string, dict *Dictionary, mutex *sync.RWMutex) *Response {
-	term = strings.TrimSpace(term)
-	definition = strings.TrimSpace(definition)
-
-	if term == "" {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Term cannot be empty",
-		}
-	}
-
-	if definition == "" {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Definition cannot be empty",
-		}
-	}
-
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	success := dict.Insert(term, definition)
-	if !success {
-		return &Response{
-			StatusCode: 409,
-			Message:    fmt.Sprintf("Term already exists: %s", term),
-		}
-	}
-
-	return &Response{
-		StatusCode: 201,
-		Message:    fmt.Sprintf("Term inserted: %s", term),
-	}
-}
-
-// handleUpdate updates an existing term in the dictionary
-func handleUpdate(term, newDefinition string, dict *Dictionary, mutex *sync.RWMutex) *Response {
-	term = strings.TrimSpace(term)
-	newDefinition = strings.TrimSpace(newDefinition)
-
-	if term == "" {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Term cannot be empty",
-		}
-	}
-
-	if newDefinition == "" {
-		return &Response{
-			StatusCode: 400,
-			Message:    "Definition cannot be empty",
-		}
-	}
-
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	success := dict.Update(term, newDefinition)
-	if !success {
-		return &Response{
-			StatusCode: 404,
-			Message:    fmt.Sprintf("Term not found: %s", term),
-		}
-	}
-
-	return &Response{
-		StatusCode: 200,
-		Message:    fmt.Sprintf("Term updated: %s", term),
-	}
-}
-
-// StatusCodeMessage returns HTTP-like status message for a code
-func StatusCodeMessage(code int) string {
-	switch code {
-	case 200:
-		return "OK"
-	case 201:
-		return "Created"
-	case 400:
-		return "Bad Request"
-	case 404:
-		return "Not Found"
-	case 409:
-		return "Conflict"
-	case 500:
-		return "Internal Server Error"
-	default:
-		return "Unknown"
-	}
-}
-
-// GetStatusEmoji returns an emoji for a status code
-func GetStatusEmoji(code int) string {
-	if code >= 200 && code < 300 {
-		return "✅"
-	} else if code >= 400 && code < 500 {
-		return "⚠️"
-	} else if code >= 500 {
-		return "❌"
-	}
-	return "ℹ️"
 }

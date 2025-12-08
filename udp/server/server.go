@@ -1,10 +1,8 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"udp/utils"
@@ -12,359 +10,117 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	dict          = NewDictionary()
-	dictMutex     sync.RWMutex
-	packetCounter uint32
-)
+var dict = NewDictionary()
+var dictMutex sync.Mutex
 
-// ClientSession represents a UDP client session
-type ClientSession struct {
-	RemoteAddr       *net.UDPAddr
-	LastActivity     time.Time
-	ReliabilityMgr   *utils.ReliabilityManager
-	PacketBuffer     *utils.PacketBuffer
-	TotalReceived    int
-	TotalSent        int
-	SessionStartTime time.Time
-}
-
-// SessionManager manages multiple client sessions
-type SessionManager struct {
-	sessions map[string]*ClientSession
-	mutex    sync.RWMutex
-	timeout  time.Duration
-	logger   *zap.Logger
-}
-
-// NewSessionManager creates a new session manager
-func NewSessionManager(timeout time.Duration, logger *zap.Logger) *SessionManager {
-	return &SessionManager{
-		sessions: make(map[string]*ClientSession),
-		timeout:  timeout,
-		logger:   logger,
-	}
-}
-
-// GetOrCreateSession gets or creates a session for a client
-func (sm *SessionManager) GetOrCreateSession(remoteAddr *net.UDPAddr) *ClientSession {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	key := remoteAddr.String()
-
-	if session, exists := sm.sessions[key]; exists {
-		session.LastActivity = time.Now()
-		return session
-	}
-
-	// Create new session
-	session := &ClientSession{
-		RemoteAddr:       remoteAddr,
-		LastActivity:     time.Now(),
-		ReliabilityMgr:   utils.NewReliabilityManager(2*time.Second, 3),
-		PacketBuffer:     utils.NewPacketBuffer(5 * time.Second),
-		SessionStartTime: time.Now(),
-	}
-
-	sm.sessions[key] = session
-	sm.logger.Info("New client session created", zap.String("remote", key))
-
-	return session
-}
-
-// CleanupExpiredSessions removes sessions that have timed out
-func (sm *SessionManager) CleanupExpiredSessions() {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	now := time.Now()
-	var expiredKeys []string
-
-	for key, session := range sm.sessions {
-		if now.Sub(session.LastActivity) > sm.timeout {
-			expiredKeys = append(expiredKeys, key)
-		}
-	}
-
-	for _, key := range expiredKeys {
-		delete(sm.sessions, key)
-		sm.logger.Info("Client session expired", zap.String("remote", key))
-	}
-}
-
-// GetSessionStats returns statistics for all sessions
-func (sm *SessionManager) GetSessionStats() map[string]interface{} {
-	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
-
-	stats := make(map[string]interface{})
-	stats["total_sessions"] = len(sm.sessions)
-	stats["active_sessions"] = 0
-	stats["total_packets_received"] = 0
-	stats["total_packets_sent"] = 0
-
-	now := time.Now()
-	activeSessions := 0
-	totalReceived := 0
-	totalSent := 0
-
-	for _, session := range sm.sessions {
-		if now.Sub(session.LastActivity) <= sm.timeout {
-			activeSessions++
-		}
-		totalReceived += session.TotalReceived
-		totalSent += session.TotalSent
-	}
-
-	stats["active_sessions"] = activeSessions
-	stats["total_packets_received"] = totalReceived
-	stats["total_packets_sent"] = totalSent
-
-	return stats
-}
-
-// StartServer starts the UDP server
 func StartServer(config *Config) error {
 	logger := utils.GetLogger()
-	defer logger.Sync()
+	wg := &sync.WaitGroup{}
 
-	// Resolve UDP address
-	udpAddr, err := net.ResolveUDPAddr("udp", config.AddressString())
+	addr, err := net.ResolveUDPAddr("udp", config.AddressString())
 	if err != nil {
-		logger.Error("Failed to resolve UDP address", zap.Error(err))
+		logger.Warn("Error resolving address", zap.Error(err))
 		return err
 	}
-
-	// Listen on UDP
-	conn, err := net.ListenUDP("udp", udpAddr)
+	logger.Info("UDP Address resolved!", zap.String("address", config.AddressString()))
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		logger.Error("Failed to listen on UDP", zap.Error(err))
+		logger.Warn("Error listening on UDP", zap.Error(err))
 		return err
 	}
 	defer conn.Close()
-
-	logger.Info("UDP server started",
-		zap.String("address", config.AddressString()),
-		zap.Int("max_packet_size", config.MaxPacketSize),
-		zap.Duration("ack_timeout", config.AckTimeout),
-		zap.Int("max_retries", config.MaxRetries),
-	)
-
-	// Initialize session manager
-	sessionMgr := NewSessionManager(30*time.Second, logger)
-
-	// Cleanup goroutine
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			sessionMgr.CleanupExpiredSessions()
-		}
-	}()
-
-	// Retransmission goroutine
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			handleRetransmissions(conn, sessionMgr, logger)
-		}
-	}()
-
-	// Stats goroutine
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			stats := sessionMgr.GetSessionStats()
-			logger.Info("Server statistics",
-				zap.Int("active_sessions", stats["active_sessions"].(int)),
-				zap.Int("total_packets_received", stats["total_packets_received"].(int)),
-				zap.Int("total_packets_sent", stats["total_packets_sent"].(int)),
-			)
-		}
-	}()
-
-	// Main receive loop
-	buffer := make([]byte, 2048)
-	for {
-		n, remoteAddr, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			logger.Warn("Error reading from UDP", zap.Error(err))
-			continue
-		}
-
-		// Get or create session
-		session := sessionMgr.GetOrCreateSession(remoteAddr)
-		session.TotalReceived++
-
-		// Handle packet in goroutine
-		go handleClientPacket(conn, remoteAddr, buffer[:n], session, logger, config)
-	}
-}
-
-// handleClientPacket processes a single packet from a client
-func handleClientPacket(conn *net.UDPConn, remoteAddr *net.UDPAddr, data []byte, session *ClientSession, logger *zap.Logger, config *Config) {
-	// Deserialize packet
-	packet, err := utils.FromBytes(data)
-	if err != nil {
-		logger.Warn("Failed to deserialize packet",
-			zap.String("remote", remoteAddr.String()),
-			zap.Error(err),
-		)
-		return
-	}
-
-	// Log packet receipt
-	logger.Debug("Packet received",
-		zap.String("remote", remoteAddr.String()),
-		zap.Uint32("packet_id", packet.ID),
-		zap.String("type", packet.MessageType.String()),
-		zap.Uint16("data_size", packet.DataSize),
-	)
-
-	// Handle different packet types
-	switch packet.MessageType {
-	case utils.PacketTypeRequest:
-		handleRequest(conn, remoteAddr, packet, session, logger, config)
-
-	case utils.PacketTypeACK:
-		logger.Debug("ACK received",
-			zap.String("remote", remoteAddr.String()),
-			zap.Uint32("packet_id", packet.ID),
-		)
-		session.ReliabilityMgr.MarkACK(packet.ID)
-
-	case utils.PacketTypeHeartbeat:
-		logger.Debug("Heartbeat received",
-			zap.String("remote", remoteAddr.String()),
-			zap.Uint32("packet_id", packet.ID),
-		)
-		// Echo back heartbeat
-		ackPacket := utils.NewPacket(packet.ID, utils.PacketTypeACK, nil)
-		sendPacket(conn, remoteAddr, ackPacket, session, logger)
-
-	default:
-		logger.Warn("Unknown packet type",
-			zap.String("remote", remoteAddr.String()),
-			zap.Uint8("type", uint8(packet.MessageType)),
-		)
-	}
-}
-
-// handleRequest processes a REQUEST packet
-func handleRequest(conn *net.UDPConn, remoteAddr *net.UDPAddr, reqPacket *utils.Packet, session *ClientSession, logger *zap.Logger, config *Config) {
-	// Send ACK immediately
-	ackPacket := utils.NewPacket(reqPacket.ID, utils.PacketTypeACK, nil)
-	sendPacket(conn, remoteAddr, ackPacket, session, logger)
-
-	// Add packet to buffer (in case of fragmentation)
-	payload, err := session.PacketBuffer.Add(reqPacket)
-	if err != nil {
-		logger.Warn("Failed to add packet to buffer", zap.Error(err))
-		return
-	}
-
-	// If payload is nil, message is incomplete
-	if payload == nil {
-		logger.Debug("Fragmented message incomplete",
-			zap.String("remote", remoteAddr.String()),
-			zap.Uint32("packet_id", reqPacket.ID),
-		)
-		return
-	}
-
-	// Process complete command
-	command := string(payload)
-	logger.Debug("Processing command",
-		zap.String("remote", remoteAddr.String()),
-		zap.String("command", command),
-	)
-
-	response := ProcessDictCommand(command, dict, &dictMutex)
-	if response == nil {
-		response = &Response{
-			StatusCode: 500,
-			Message:    "Internal server error",
-		}
-	}
-
-	// Prepare response packet
-	responsePayload := []byte(fmt.Sprintf("%d %s", response.StatusCode, response.Message))
-
-	// Fragment response if needed
-	packets := utils.FragmentPayload(reqPacket.ID, responsePayload, config.MaxPacketSize)
-
-	// Send response packets
-	for _, respPacket := range packets {
-		respPacket.MessageType = utils.PacketTypeResponse
-		sendPacket(conn, remoteAddr, respPacket, session, logger)
-	}
-
-	logger.Debug("Response sent",
-		zap.String("remote", remoteAddr.String()),
-		zap.Uint32("packet_id", reqPacket.ID),
-		zap.Int("packets", len(packets)),
-	)
-}
-
-// sendPacket sends a packet to a client and tracks it
-func sendPacket(conn *net.UDPConn, remoteAddr *net.UDPAddr, packet *utils.Packet, session *ClientSession, logger *zap.Logger) error {
-	// Serialize packet
-	data := packet.Bytes()
-
-	// Send packet
-	_, err := conn.WriteToUDP(data, remoteAddr)
-	if err != nil {
-		logger.Warn("Failed to send packet",
-			zap.String("remote", remoteAddr.String()),
-			zap.Error(err),
-		)
-		return err
-	}
-
-	// Track sent packet
-	session.ReliabilityMgr.TrackSent(packet)
-	session.TotalSent++
-
-	logger.Debug("Packet sent",
-		zap.String("remote", remoteAddr.String()),
-		zap.Uint32("packet_id", packet.ID),
-		zap.String("type", packet.MessageType.String()),
-	)
+	logger.Info("Listening on: ", zap.String("address", config.AddressString()))
+	wg.Add(1)
+	go handleConnection(*conn, logger, wg)
+	wg.Wait()
 
 	return nil
 }
 
-// handleRetransmissions checks for packets that need retransmission
-func handleRetransmissions(conn *net.UDPConn, sessionMgr *SessionManager, logger *zap.Logger) {
-	sessionMgr.mutex.RLock()
-	defer sessionMgr.mutex.RUnlock()
-
-	for _, session := range sessionMgr.sessions {
-		candidates := session.ReliabilityMgr.GetRetransmitCandidates()
-		for _, packet := range candidates {
-			_, err := conn.WriteToUDP(packet.Bytes(), session.RemoteAddr)
-			if err != nil {
-				logger.Warn("Failed to retransmit packet",
-					zap.String("remote", session.RemoteAddr.String()),
-					zap.Uint32("packet_id", packet.ID),
-					zap.Error(err),
-				)
-				continue
-			}
-
-			session.ReliabilityMgr.TrackSent(packet)
-			logger.Debug("Packet retransmitted",
-				zap.String("remote", session.RemoteAddr.String()),
-				zap.Uint32("packet_id", packet.ID),
-			)
+func handleConnection(conn net.UDPConn, logger *zap.Logger, wg *sync.WaitGroup) {
+	defer func() {
+		logger.Info("Client disconnected", zap.String("remote_addr", conn.RemoteAddr().String()))
+		conn.Close()
+		wg.Done()
+	}()
+	buffer := make([]byte, 1024)
+	for {
+		n, remoteAddr, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			logger.Warn("Error reading from connection", zap.Error(err))
+			return
 		}
+		data := buffer[:n]
+		logger.Info("Received data", zap.ByteString("data", data))
+		wg.Add(1)
+		go processPacket(data, &conn, remoteAddr, logger, wg)
+	}
+
+}
+
+func processPacket(data []byte, conn *net.UDPConn, remoteAddr *net.UDPAddr, logger *zap.Logger, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer logger.Info("Finished processing data", zap.String("remote_addr", remoteAddr.String()))
+
+	crc := utils.NewCRC()
+
+	packet, err := utils.ParsePacket(data)
+	if err != nil {
+		logger.Warn("Error parsing packet", zap.Error(err))
+		return
+	}
+	logger.Info("Parsed packet", zap.Uint16("control", packet.Control), zap.ByteString("payload", packet.Payload), zap.Uint16("crc", packet.CRC))
+
+	if !crc.ValidatePacket(*packet) {
+		logger.Info("Packet CRC not valid", zap.String("remote_addr", remoteAddr.String()))
+		return
+	}
+
+	responseData, err := processData(packet.Payload, logger)
+	if err != nil {
+		logger.Warn("Error processing data", zap.Error(err))
+	}
+	responsePacket := utils.NewPacket(responseData)
+	for i := range responsePacket {
+		_, err = conn.WriteToUDP(responsePacket[i].Bytes(), remoteAddr)
+		if err != nil {
+			logger.Warn("Error writing to UDP connection", zap.Error(err))
+		}
+		time.Sleep(10 * time.Millisecond) // Small delay to avoid packet loss
 	}
 }
 
-// GetNextPacketID generates the next packet ID
-func GetNextPacketID() uint32 {
-	return atomic.AddUint32(&packetCounter, 1)
+func processData(data []byte, logger *zap.Logger) ([]byte, error) {
+	logger.Info("Processing data", zap.ByteString("data", data))
+
+	request, err := utils.ParseHTTPRequest(data)
+	if err != nil {
+		response := utils.HTTPResponse{
+			StatusCode: 400,
+			Message:    "Invalid request format: " + err.Error(),
+		}
+		logger.Warn("Invalid request", zap.Error(err))
+		return response.Bytes(), err
+	}
+
+	logger.Info("Parsed request",
+		zap.String("method", request.Method),
+		zap.String("path", request.Path),
+		zap.String("body", request.Body))
+
+	/*
+		==================================================
+		Here you can implement any data processing logic.
+		Use functions from server/utils.go as needed.
+		==================================================
+	*/
+	response := ProcessDictCommand(request, dict, &dictMutex)
+
+	/*
+		==================================================
+		End of data processing logic.
+		==================================================
+	*/
+
+	return response.Bytes(), nil
 }

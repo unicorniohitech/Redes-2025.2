@@ -53,7 +53,7 @@ func main() {
 		config.SetAddress(*address)
 		config.SetPort(*port)
 
-		logger.Info("Starting server", zap.String("address", config.AddressString()))
+		logger.Info("Starting TCP server", zap.String("address", config.AddressString()))
 		if err := server.StartServer(config); err != nil {
 			logger.Fatal("Failed to start server", zap.Error(err))
 		}

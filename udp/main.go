@@ -26,7 +26,7 @@ func main() {
 	if envHost != "" {
 		addrDefault = envHost
 	}
-	portDefault := 8000
+	portDefault := 8080
 	if envPort != "" {
 		if p, err := strconv.Atoi(envPort); err == nil {
 			portDefault = p
@@ -64,9 +64,7 @@ func main() {
 		config.SetPort(*port)
 
 		logger.Info("Starting UDP client", zap.String("address", config.AddressString()))
-		if err := client.StartClient(config); err != nil {
-			logger.Fatal("Failed to start client", zap.Error(err))
-		}
+		client.StartClient(config)
 
 	default:
 		fmt.Printf("Error: invalid mode '%s'\n", *mode)

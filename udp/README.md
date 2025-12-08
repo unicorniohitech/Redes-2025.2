@@ -1,59 +1,84 @@
-# 📦 UDP - User Datagram Protocol Implementation
+# Redes-2025.2
 
-## 📌 Visão Geral
+## Descrição
 
-Implementação de um sistema cliente-servidor usando **UDP (User Datagram Protocol)** com gerenciamento robusto de pacotes, fragmentação de mensagens, detecção de perda e retransmissão automática.
+Projeto de aplicação cliente-servidor UDP em Go. O servidor implementa um sistema de dicionário distribuído com comandos LOOKUP, INSERT e UPDATE. A comunicação utiliza um protocolo UDP customizado com gerenciamento de confiabilidade, fragmentação de mensagens e detecção de perda de pacotes.
 
-Este projeto espelha a estrutura do projeto TCP, mas com as características específicas de um protocolo sem conexão e com confiabilidade implementada em camada de aplicação.
+## Requisitos
 
----
+- **Go**: versão [1.25.4](https://go.dev/doc/install) ou superior.
+  - *[Windows](https://go.dev/dl/go1.25.4.windows-amd64.msi)*
+  - *[Linux](https://go.dev/dl/go1.25.4.linux-amd64.tar.gz)*
+  - *[MacOS](https://go.dev/dl/)*
+    - *[ARM64](https://go.dev/dl/go1.25.4.darwin-arm64.pkg)*
+    - *[x86-64](https://go.dev/dl/go1.25.4.darwin-amd64.pkg)*
+  - *[Source](https://go.dev/dl/go1.25.4.src.tar.gz)*
+- **Dependências**: gerenciadas automaticamente pelo Go modules
+  - `go.uber.org/zap` (logging)
 
-## 🎯 Objetivos
+## Instalação
 
-- **Comunicação sem conexão**: Usar UDP em vez de TCP
-- **Confiabilidade manual**: Implementar ACKs e retransmissão
-- **Gerenciamento de pacotes**: Fragmentação e reassembly
-- **Detecção de perda**: Rastreamento e métricas
-- **Compatibilidade**: Mesma interface de aplicação que TCP
+1. Clone o repositório:
 
----
+   ```bash
+   git clone <url-do-repositorio>
+   cd Redes-2025.2/udp
+   ```
 
-## 🏗️ Estrutura do Projeto
+2. Instale as dependências:
 
-```
-udp/
-├── main.go                 # Ponto de entrada
-├── go.mod                  # Dependências Go
-├── Dockerfile              # Build em container
-├── README.md              # Este arquivo
-│
-├── server/
-│   ├── server.go          # Listener UDP e handler
-│   ├── db.go              # Dicionário em memória
-│   ├── config.go          # Configuração do servidor
-│   └── utils.go           # Utilitários do servidor
-│
-├── client/
-│   ├── client.go          # Cliente UDP interativo
-│   ├── config.go          # Configuração do cliente
-│   └── utils.go           # Utilitários do cliente
-│
-├── utils/
-│   ├── logger.go          # Logger (Zap)
-│   ├── protocol.go        # Protocolo UDP customizado
-│   ├── packet.go          # Gerenciamento de pacotes
-│   └── reliability.go      # ACKs e retransmissão
-│
-└── bin/                    # Binários compilados
+   ```bash
+   go mod download
+   ```
+
+## Como Executar
+
+### Passo 1: Iniciar o Servidor
+
+Em um terminal, navegue até o diretório `udp` e execute:
+
+```bash
+cd udp
+go run main.go -mode=server
 ```
 
----
+O servidor iniciará na porta padrão `8080` no endereço `localhost`. Para especificar uma porta ou endereço diferentes:
 
-## 🔧 Protocolo UDP Customizado
+```bash
+go run main.go -mode=server -address=localhost -port=8080
+```
+
+### Passo 2: Iniciar o Cliente
+
+Em outro terminal, navegue até o diretório `udp` e execute:
+
+```bash
+cd udp
+go run main.go -mode=client
+```
+
+O cliente se conectará ao servidor em `localhost:8080`. Para conectar a um servidor diferente:
+
+```bash
+go run main.go -mode=client -address=localhost -port=8080
+```
+
+### Uso do Cliente
+
+Após conectar, digite comandos no terminal do cliente:
+
+#### Comandos Disponíveis
+
+- **`LIST`** - Lista todos os termos cadastrados
+- **`LOOKUP <termo>`** - Consulta a definição de um termo
+- **`INSERT <termo> <definição>`** - Insere um novo termo no dicionário
+- **`UPDATE <termo> <nova_definição>`** - Atualiza a definição de um termo existente
+
+## Protocolo UDP Customizado
 
 ### Estrutura do Pacote
 
-```
+```text
 Byte 0-3:    Packet ID (uint32)         - Identificador único
 Byte 4:      Message Type (uint8)       - 0=REQ, 1=RES, 2=ACK, 3=HB
 Byte 5-6:    Data Size (uint16)         - Tamanho da payload
@@ -74,157 +99,38 @@ Byte 13+:    Payload (variável)         - Comando/resposta
 | REQUEST | 0 | Comando do cliente |
 | RESPONSE | 1 | Resposta do servidor |
 | ACK | 2 | Confirmação de recebimento |
-| HEARTBEAT | 3 | Keep-alive (futuro) |
+| HEARTBEAT | 3 | Keep-alive |
 
----
+### Respostas UDP
 
-## 🚀 Como Usar
+Todas as respostas seguem o formato: `<StatusCode> <StatusText>: <Message>`
 
-### 🔨 Pré-requisitos
+**Códigos de Status:**
 
-- Go 1.25.4 ou superior
-- Acesso a terminal/PowerShell
+- `200 OK` - Operação bem-sucedida (LOOKUP, UPDATE)
+- `201 Created` - Termo inserido com sucesso
+- `400 Bad Request` - Formato de comando inválido
+- `404 Not Found` - Termo não encontrado
+- `408 Request Timeout` - Timeout ao acessar o dicionário
+- `409 Conflict` - Termo já existe (INSERT)
+- `501 Not Implemented` - Comando desconhecido
 
-### 💾 Instalação de Dependências
-
-```bash
-go mod download
-```
-
-### ▶️ Executar Servidor
-
-```bash
-# Modo desenvolvimento
-go run main.go -mode=server -address=localhost -port=8000
-
-# Ou compilar
-go build -o bin/server .
-./bin/server -mode=server -address=0.0.0.0 -port=8000
-```
-
-**Variáveis de Ambiente:**
-```bash
-HOST=0.0.0.0 PORT=9000 go run main.go -mode=server
-```
-
-### 👤 Executar Cliente
-
-```bash
-# Modo desenvolvimento
-go run main.go -mode=client -address=localhost -port=8000
-
-# Ou compilar
-go build -o bin/client .
-./bin/client -mode=client -address=localhost -port=8000
-```
-
----
-
-## 📡 Operações Disponíveis
-
-### 1. **LIST**
-Lista todos os termos no dicionário
-
-```
-Client → Server: "LIST"
-Server → Client: "termo1\ntermo2\ntermo3\n..."
-```
-
-### 2. **LOOKUP <termo>**
-Busca a definição de um termo
-
-```
-Client → Server: "LOOKUP termo"
-Server → Client: "definição do termo"
-```
-
-### 3. **INSERT <termo> <definição>**
-Insere um novo termo e sua definição
-
-```
-Client → Server: "INSERT novo definição"
-Server → Client: "Success: termo inserido" ou "Error: termo já existe"
-```
-
-### 4. **UPDATE <termo> <nova_definição>**
-Atualiza a definição de um termo existente
-
-```
-Client → Server: "UPDATE termo nova_definição"
-Server → Client: "Success: termo atualizado" ou "Error: termo não existe"
-```
-
----
-
-## 🔄 Fluxo de Comunicação
-
-### Requisição Bem-Sucedida
-
-```
-Cliente                          Servidor
-  │
-  ├─ [REQ] Pacote #1 ─────────→ │
-  │                              │
-  │                    [ACK] Pacote #1 ← ACK
-  │                              │
-  │                              │ Processa
-  │                              │
-  │              [RES] Pacote #1 ← Resposta
-  │                              │
-  └─ Exibe resultado
-```
-
-### Com Retransmissão (Timeout)
-
-```
-Cliente                          Servidor
-  │
-  ├─ [REQ] Pacote #1 ─────────→ │
-  │                         (PERDIDO)
-  │
-  │ [Timeout: 2s]
-  │
-  ├─ [REQ] Pacote #1 (retry) ─→ │
-  │                              │ Processa
-  │                    [ACK] ← ACK
-  │
-  └─ Continua...
-```
-
-### Com Fragmentação
-
-```
-Cliente                          Servidor
-  │
-  ├─ [REQ] Pacote 1/3 ─────────→ │
-  ├─ [REQ] Pacote 2/3 ─────────→ │
-  ├─ [REQ] Pacote 3/3 ─────────→ │
-  │                              │
-  │              [ACK] Todos 1-3 ← Confirmação
-  │                              │
-  │                              │ Reassembly
-  │                              │ Processa
-  │
-  │         [RES] 1 ou mais pak ← Resposta
-  │
-  └─ Exibe resultado
-```
-
----
-
-## 📊 Gerenciamento de Confiabilidade
+## Gerenciamento de Confiabilidade
 
 ### ACK Tracking
-- Cada pacote REQ recebe um ACK do servidor
-- Cada pacote RES deve ser confirmado pelo cliente (futuro)
-- Timeouts detectam perdas e acionam retransmissão
 
-### Retransmissão
-- Timeout padrão: **2 segundos**
+- Cada pacote REQ recebe um ACK do servidor
+- Timeouts detectam perdas e acionam retransmissão
 - Máximo de retentativas: **3**
-- Exponential backoff: `timeout * (retryCount + 1)`
+
+### Fragmentação
+
+- Mensagens grandes são fragmentadas automaticamente
+- Max payload por fragmento: 1024 bytes
+- Reassembly automático no receptor
 
 ### Métricas Coletadas
+
 - Total de pacotes enviados
 - Total de pacotes recebidos
 - Total de pacotes perdidos (detectados)
@@ -232,174 +138,66 @@ Cliente                          Servidor
 - Latência média (ms)
 - Taxa de perda (%)
 
----
+Para encerrar, pressione `Ctrl+C`
 
-## 🧪 Testes e Simulação
+## Parâmetros de Linha de Comando
 
-### Simular Perda de Pacotes
+- `-mode`: **obrigatório** - Define o modo de execução (`server` ou `client`)
+- `-address`: opcional - Endereço para bind/conexão (padrão: `localhost`)
+- `-port`: opcional - Porta para bind/conexão (padrão: `8080`)
 
-Para testar confiabilidade, você pode simular perda no servidor ou cliente:
+## Exemplo de Uso
 
-```go
-// No config.go
-config.SetSimulateLoss(true)    // Ativa simulação
-config.SetLossRate(0.1)         // 10% de perda
-```
-
-Isso irá:
-- Descartar aleatoriamente X% dos pacotes recebidos
-- Forçar retransmissões automáticas
-- Permitir observar comportamento de confiabilidade
-
-### Exemplo de Teste
+**Terminal 1 (Servidor):**
 
 ```bash
-# Terminal 1: Servidor com simulação de 20% de perda
-go run main.go -mode=server
-
-# Terminal 2: Cliente enviando múltiplos comandos
-go run main.go -mode=client
-
-# Observe: Retransmissões e timeouts no console
+cd udp
+go run main.go -mode=server -port=8080
 ```
 
----
-
-## 🔐 Validação de Integridade
-
-### Checksum
-- Algoritmo: CRC16 ou simples (soma)
-- Validado em cada pacote recebido
-- Pacotes corrompidos são descartados
-
-### Sequenciamento
-- Cada pacote tem ID único (uint32)
-- Detecta duplicatas
-- Reassembly mantém ordem em fragmentos
-
----
-
-## 📈 Performance
-
-### Comparativo Esperado
-
-| Métrica | TCP | UDP |
-|---------|-----|-----|
-| Latência | Maior (3-way handshake) | Menor |
-| Confiabilidade | 100% | Configurável |
-| Overhead | Maior (headers) | Menor |
-| Complexidade | Simples | Complexa |
-| Fragmentação | Automática | Manual |
-
----
-
-## 🐳 Containerização
-
-### Build da Imagem
+**Terminal 2 (Cliente):**
 
 ```bash
-docker build -t udp-app .
+cd udp
+go run main.go -mode=client -port=8080
 ```
 
-### Executar Container
+**Interação:**
 
 ```bash
-# Servidor
-docker run -p 8000:8000 -e MODE=server -e HOST=0.0.0.0 udp-app -mode=server
+Enter message to send (or Ctrl+C to quit):
+INSERT golang A programming language
+# Servidor responde: 201 Created: Term 'golang' inserted successfully
 
-# Cliente (interativo)
-docker run -it -e MODE=client -e HOST=host.docker.internal udp-app -mode=client
+LOOKUP golang
+# Servidor responde: 200 OK: A programming language
+
+UPDATE golang A statically typed programming language
+# Servidor responde: 200 OK: Term 'golang' updated successfully
+
+LOOKUP python
+# Servidor responde: 404 Not Found: Term 'python' not found
+
+LIST
+# Servidor responde: 200 OK: golang
 ```
 
----
+## Testes
 
-## 🛠️ Desenvolvimento
+Execute os testes com:
 
-### Estrutura do Código
-
-```
-main.go
-  ├─ Flag parsing
-  └─ Mode selection
-       ├─ Server Mode
-       │  └─ server.StartServer()
-       └─ Client Mode
-          └─ client.StartClient()
-
-server/
-  ├─ server.go      → Listener + Handler
-  ├─ config.go      → Configurações
-  ├─ db.go          → Persistência de dados
-  └─ utils.go       → Processamento de comandos
-
-client/
-  ├─ client.go      → Sender + Receiver
-  ├─ config.go      → Configurações
-  └─ utils.go       → Parser de respostas
-
-utils/
-  ├─ logger.go      → Logging
-  ├─ protocol.go    → Serialização de pacotes
-  ├─ packet.go      → Gerenciamento de buffers
-  └─ reliability.go  → ACKs e métricas
+```bash
+go test ./utils ./client ./server -v
 ```
 
-### Adicionando Novos Comandos
+Execute com cobertura:
 
-1. Adicione comando em `client/utils.go`
-2. Implemente handler em `server/utils.go`
-3. Use `ProcessDictCommand()` como referência
+```bash
+go test -cover ./utils ./client ./server
+```
 
----
+Benchmark de performance:
 
-## 🐛 Troubleshooting
-
-### "Connection refused"
-- Verifique se servidor está rodando
-- Confirme porta e endereço
-- Firewall pode estar bloqueando UDP
-
-### "Timeout"
-- Servidor não recebeu o pacote (perda)
-- Resposta do servidor foi perdida
-- Timeout é retentado automaticamente
-
-### "Checksum failed"
-- Pacote corrompido em trânsito
-- Descartado automaticamente
-- Cliente retransmite
-
----
-
-## 📚 Recursos e Referências
-
-- [RFC 768 - UDP Specification](https://tools.ietf.org/html/rfc768)
-- [Go net package - UDPConn](https://golang.org/pkg/net/#UDPConn)
-- [Uber Zap Logger](https://github.com/uber-go/zap)
-- [PromptUI](https://github.com/manifoldco/promptui)
-
----
-
-## 📝 Changelog
-
-### v0.1.0 - Fundações
-- [x] Estrutura base do projeto
-- [x] Go.mod e configuração
-- [x] Logger e utilitários
-- [ ] Protocolo UDP customizado
-- [ ] Gerenciamento de pacotes
-- [ ] Servidor UDP
-- [ ] Cliente UDP
-- [ ] Testes
-
----
-
-## 👥 Autor
-
-Desenvolvido para a disciplina **Redes de Computadores 2025.2**
-
----
-
-## 📄 Licença
-
-Este projeto é fornecido como material educacional.
+```bash
+go test -run='' -bench='.' -benchmem ./utils
+```
