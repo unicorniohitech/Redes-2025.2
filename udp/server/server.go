@@ -13,6 +13,9 @@ import (
 var dict = NewDictionary()
 var dictMutex sync.Mutex
 
+var packetStorage = utils.NewPacketStore()
+var packetStorageMutex sync.Mutex
+
 func StartServer(config *Config) error {
 	logger := utils.GetLogger()
 	wg := &sync.WaitGroup{}
@@ -43,14 +46,15 @@ func handleConnection(conn net.UDPConn, logger *zap.Logger, wg *sync.WaitGroup) 
 		conn.Close()
 		wg.Done()
 	}()
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 2048)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			logger.Warn("Error reading from connection", zap.Error(err))
 			return
 		}
-		data := buffer[:n]
+		data := make([]byte, n)
+		copy(data, buffer[:n])
 		logger.Info("Received data", zap.ByteString("data", data))
 		wg.Add(1)
 		go processPacket(data, &conn, remoteAddr, logger, wg)
@@ -62,21 +66,19 @@ func processPacket(data []byte, conn *net.UDPConn, remoteAddr *net.UDPAddr, logg
 	defer wg.Done()
 	defer logger.Info("Finished processing data", zap.String("remote_addr", remoteAddr.String()))
 
-	crc := utils.NewCRC()
-
 	packet, err := utils.ParsePacket(data)
 	if err != nil {
 		logger.Warn("Error parsing packet", zap.Error(err))
 		return
 	}
-	logger.Info("Parsed packet", zap.Uint16("control", packet.Control), zap.ByteString("payload", packet.Payload), zap.Uint16("crc", packet.CRC))
+	logger.Info("Parsed packet", zap.Uint16("control", packet.Control), zap.Uint16("length", packet.Length), zap.ByteString("payload", packet.Payload), zap.Uint16("crc", packet.CRC))
 
-	if !crc.ValidatePacket(*packet) {
-		logger.Info("Packet CRC not valid", zap.String("remote_addr", remoteAddr.String()))
+	payload, complete := verifyPacket(packet, packetStorage, &packetStorageMutex, remoteAddr, logger)
+	if !complete {
 		return
 	}
 
-	responseData, err := processData(packet.Payload, logger)
+	responseData, err := processData(payload, logger)
 	if err != nil {
 		logger.Warn("Error processing data", zap.Error(err))
 	}
@@ -88,6 +90,35 @@ func processPacket(data []byte, conn *net.UDPConn, remoteAddr *net.UDPAddr, logg
 		}
 		time.Sleep(10 * time.Millisecond) // Small delay to avoid packet loss
 	}
+}
+
+func verifyPacket(packet utils.Packet, ps *utils.PacketStore, mux *sync.Mutex, remoteAddr *net.UDPAddr, logger *zap.Logger) ([]byte, bool) {
+	defer logger.Info("Finished processing data", zap.String("remote_addr", remoteAddr.String()))
+
+	crc := utils.NewCRC()
+	if !crc.ValidatePacket(packet) {
+		logger.Info("Packet CRC not valid", zap.String("remote_addr", remoteAddr.String()))
+		return []byte{}, false
+	}
+	payload := packet.Payload
+
+	if packet.Length > 0 {
+		mux.Lock()
+		ps.AddPacket(remoteAddr.String(), packet)
+		if ps.IsComplete(remoteAddr.String()) {
+			logger.Info("Packet complete", zap.String("remote_addr", remoteAddr.String()))
+			packets := ps.Packets[remoteAddr.String()]
+			payload = utils.GetCompletePayload(packets)
+			logger.Info("Complete payload received", zap.ByteString("payload", payload))
+			delete(ps.Packets, remoteAddr.String())
+			mux.Unlock()
+		} else {
+			mux.Unlock()
+			return []byte{}, false
+		}
+	}
+
+	return payload, true
 }
 
 func processData(data []byte, logger *zap.Logger) ([]byte, error) {

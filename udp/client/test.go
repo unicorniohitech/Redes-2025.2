@@ -47,7 +47,13 @@ func RunTestClient(address string, port int, interval time.Duration) error {
 				logger.Warn("Error sending command", zap.String("command", command), zap.Error(err))
 			}
 
-			_, _, message := ParseHTTPResponse(string(response))
+			status_code, status_text, message := ParseHTTPResponse(string(response))
+			logger.Info(
+				"Mensage received:",
+				zap.Int("status_code", status_code),
+				zap.String("status_text", status_text),
+				zap.String("message", message),
+			)
 			if command == "LIST" {
 				logger.Info("Dictionary contents", zap.String("dictionary", message))
 				dict := DictionaryFromString(message)
@@ -101,26 +107,23 @@ func sendTestCommand(logger *zap.Logger, serverAddr string, command string) ([]b
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Receive response
-	buffer := make([]byte, 1024)
-	n, _, err := conn.ReadFromUDP(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %w", err)
+	buffer := make([]byte, 2048)
+	responsePayload := []byte{}
+	responseFinished := false
+	for !responseFinished {
+		n, remoteAddr, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			logger.Warn("Error reading from connection", zap.Error(err))
+			continue
+		}
+		data := make([]byte, n)
+		copy(data, buffer[:n])
+		logger.Info("Received data", zap.ByteString("data", data))
+		processResponse(data, &responsePayload, &responseFinished, remoteAddr, logger)
 	}
+	conn.Close()
 
-	// Parse response packet
-	responsePacket, err := utils.ParsePacket(buffer[:n])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing response: %w", err)
-	}
-
-	logger.Info("Response received",
-		zap.Uint16("control", responsePacket.Control),
-		zap.ByteString("payload", responsePacket.Payload),
-		zap.Uint16("crc", responsePacket.CRC),
-	)
-
-	return responsePacket.Payload, nil
+	return responsePayload, nil
 }
 
 func DictionaryFromString(data string) *Dictionary {

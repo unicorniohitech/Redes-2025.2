@@ -69,7 +69,7 @@ func main() {
 
 	case "teste":
 		logger.Info("Starting test client", zap.String("address", *address), zap.Int("port", *port))
-		if err := client.RunTestClient(*address, *port, 1*time.Second); err != nil {
+		if err := client.RunTestClient(*address, *port, 100*time.Millisecond); err != nil {
 			logger.Fatal("Failed to run test client", zap.Error(err))
 		}
 
