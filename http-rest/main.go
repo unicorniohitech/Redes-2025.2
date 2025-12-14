@@ -26,7 +26,7 @@ func main() {
 	if envHost != "" {
 		addrDefault = envHost
 	}
-	portDefault := 8000
+	portDefault := 9000
 	if envPort != "" {
 		if p, err := strconv.Atoi(envPort); err == nil {
 			portDefault = p
