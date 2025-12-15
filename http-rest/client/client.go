@@ -1,30 +1,33 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/manifoldco/promptui"
 )
 
 type APIResponse struct {
-	Success  bool        `json:"sucesso"`
-	Message  string      `json:"mensagem"`
-	Data     interface{} `json:"dados"`
+	Success bool        `json:"sucesso"`
+	Message string      `json:"mensagem,omitempty"`
+	Data    interface{} `json:"dados,omitempty"`
 }
 
 func StartClient(config *Config) error {
 	baseURL := "http://" + config.AddressString()
 
 	for {
-		prompt := promptui.Select{
+		menu := promptui.Select{
 			Label: "Selecione um comando",
 			Items: []string{"LISTAR", "BUSCAR", "INSERIR", "ATUALIZAR"},
 		}
 
-		_, command, err := prompt.Run()
+		_, command, err := menu.Run()
 		if err != nil {
 			return err
 		}
@@ -36,13 +39,13 @@ func StartClient(config *Config) error {
 			printResponse(resp, err)
 
 		case "BUSCAR":
-			term := readInput("Digite o termo:")
+			term := readInput("Digite o termo")
 			resp, err := http.Get(baseURL + "/termos/buscar?termo=" + term)
 			printResponse(resp, err)
 
 		case "INSERIR":
-			term := readInput("Digite o termo:")
-			definition := readInput("Digite a definição:")
+			term := readInput("Digite o termo")
+			definition := readInput("Digite a definição")
 
 			body, _ := json.Marshal(map[string]string{
 				"termo":     term,
@@ -57,8 +60,8 @@ func StartClient(config *Config) error {
 			printResponse(resp, err)
 
 		case "ATUALIZAR":
-			term := readInput("Digite o termo:")
-			definition := readInput("Digite a nova definição:")
+			term := readInput("Digite o termo")
+			definition := readInput("Digite a nova definição")
 
 			body, _ := json.Marshal(map[string]string{
 				"termo":     term,
@@ -80,7 +83,7 @@ func StartClient(config *Config) error {
 
 func printResponse(resp *http.Response, err error) {
 	if err != nil {
-		fmt.Println("'Erro de conexão:", err)
+		fmt.Println("Erro de conexão:", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -91,27 +94,36 @@ func printResponse(resp *http.Response, err error) {
 	fmt.Println("\nStatus:", resp.Status)
 
 	if response.Message != "" {
-		fmt.Println( response.Message)
+		fmt.Println(response.Message)
 	}
 
 	if response.Data != nil {
-		fmt.Println("Dados:")
 		switch data := response.Data.(type) {
+
 		case []interface{}:
+			if len(data) == 0 {
+				fmt.Println("Sem termos cadastrados")
+				break
+			}
+			fmt.Println("Dados:")
 			for _, v := range data {
 				fmt.Println(" -", v)
 			}
+
 		case map[string]interface{}:
+			fmt.Println("Dados:")
 			for k, v := range data {
 				fmt.Printf("   %s: %v\n", k, v)
 			}
 		}
 	}
+
 	fmt.Println()
 }
 
 func readInput(label string) string {
-	prompt := promptui.Prompt{Label: label}
-	text, _ := prompt.Run()
-	return text
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(label + ": ")
+	text, _ := reader.ReadString('\n')
+	return strings.TrimSpace(text)
 }
