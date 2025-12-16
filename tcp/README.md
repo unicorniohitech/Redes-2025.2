@@ -45,7 +45,7 @@ go run main.go -mode=server
 O servidor iniciará na porta padrão `8000` no endereço `localhost`. Para especificar uma porta ou endereço diferentes:
 
 ```bash
-go run main.go -mode=server -address=localhost -port=9000
+go run main.go -mode=server -address=localhost -port=8000
 ```
 
 ### Passo 2: Iniciar o Cliente
@@ -60,7 +60,7 @@ go run main.go -mode=client
 O cliente se conectará ao servidor em `localhost:8000`. Para conectar a um servidor diferente:
 
 ```bash
-go run main.go -mode=client -address=localhost -port=9000
+go run main.go -mode=client -address=localhost -port=8000
 ```
 
 ### Uso do Cliente

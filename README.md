@@ -44,13 +44,24 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 
 ---
 
-### 📦 UDP
+### 📦 [UDP](./udp)
 
-- Projeto em desenvolvimento
-- Comunicação leve e sem conexão
-- Aguardando definição de requisitos
+- Implementação cliente-servidor com troca de mensagens
+- Interface CLI interativa
+- Suporte para grandes payloads
+- Suporte para diferentes modos de operação
 
-🔗 **[Ver instruções →](./udp/README.md)**
+🔗 **[Ver instruções detalhadas →](./udp/README.md)**
+
+---
+
+### 📦 [HTTP](./http-rest)
+
+- Implementação cliente-servidor com troca de mensagens
+- Interface CLI interativa
+- Suporte para diferentes modos de operação
+
+🔗 **[Ver instruções detalhadas →](./http-rest/README.md)**
 
 ---
 
@@ -58,13 +69,22 @@ Cada projeto é modular e pode ser executado de forma independente, facilitando 
 
 ```txt
 Redes-2025.2/
+├── http-rest/        # Projeto HTTP
+│   ├── main.go
+│   ├── server/
+│   ├── client/
+│   └── README.md     # Instruções HTTP
 ├── tcp/              # Projeto TCP
 │   ├── main.go
 │   ├── server/
 │   ├── client/
 │   └── README.md     # Instruções TCP
 ├── udp/              # Projeto UDP
-│   └── README.md     # Instruções UDP (em breve)
+│   ├── main.go
+│   ├── server/
+│   ├── client/
+│   ├── test_files/   # Arquivos em texto plano com mais de 2000 bytes para teste
+│   └── README.md     # Instruções UDP
 └── README.md         # Este arquivo
 ```
 
@@ -87,14 +107,14 @@ Redes-2025.2/
    docker compose up --build -d
    ```
 
-   - O servidor ficará disponível em `localhost:8000` (conforme configuração do `compose/docker-compose.yaml`).
+   - Os servidores ficarão disponíveis em `localhost` nas portas `:8000`, `:8080` e `:9000` (conforme configuração do `compose/docker-compose.yaml`).
    - Para parar o servidor:
 
    ```bash
    docker compose down
    ```
 
-3. Iniciar o cliente usando os scripts fornecidos (sem Docker)
+3. Iniciar o cliente usando os scripts fornecidos (sem Docker) (apenas serviço tcp)
    - Os scripts estão em `client/` e aceitam dois parâmetros opcionais: `HOST` e `PORT` (valores padrão: `localhost` e `8000`).
 
    - Linux / macOS / WSL (Bash):
@@ -116,13 +136,29 @@ Redes-2025.2/
    - O script tenta executar o binário `tcp/bin/tcp` se existir; caso contrário, ele compila o projeto (`go build`) para `tcp/bin/tcp` e então executa o cliente.
    - Por isso, o script requer o `go` disponível no PATH para compilar na primeira execução.
 
-4. Alternativa: executar direto com Go
-   - Se preferir executar sem os scripts, use diretamente o comando `go run` no módulo `tcp`:
+4. Alternativa: executar direto com Go (menos propenso a erros de ambiente windows)
+   - Se preferir executar sem os scripts, use diretamente o comando `go run` no módulo desejado:
 
    ```bash
    cd tcp
    go run main.go -mode=server           # servidor
    go run main.go -mode=client           # cliente (ou use os scripts)
+   ```
+
+   ou
+
+   ```bash
+   cd udp
+   go run main.go -mode=server           # servidor
+   go run main.go -mode=client           # cliente
+   ```
+
+   ou
+
+   ```bash
+   cd http-rest
+   go run main.go -mode=server           # servidor
+   go run main.go -mode=client           # cliente
    ```
 
 5. Observações

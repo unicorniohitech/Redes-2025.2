@@ -1,8 +1,8 @@
-'# Redes-2025.2
+# Redes-2025.2
 
 ## Descrição
 
-Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sistema de dicionário distribuído com comandos LOOKUP, INSERT e UPDATE. A comunicação utiliza estruturas `HTTPRequest` e `HTTPResponse` personalizadas, com códigos de status HTTP apropriados.
+Projeto de aplicação cliente-servidor HTTP REST em Go. O servidor implementa um sistema de dicionário distribuído com comandos LOOKUP, INSERT e UPDATE. A comunicação utiliza estruturas `HTTPRequest` e `HTTPResponse` personalizadas, com códigos de status HTTP apropriados para operações de dicionário distribuído.
 
 ## Requisitos
 
@@ -22,7 +22,7 @@ Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sist
 
    ```bash
    git clone <url-do-repositorio>
-   cd Redes-2025.2/tcp
+   cd Redes-2025.2/http-rest
    ```
 
 2. Instale as dependências:
@@ -35,32 +35,32 @@ Projeto de aplicação cliente-servidor TCP em Go. O servidor implementa um sist
 
 ### Passo 1: Iniciar o Servidor
 
-Em um terminal, navegue até o diretório `tcp` e execute:
+Em um terminal, navegue até o diretório `http-rest` e execute:
 
 ```bash
-cd tcp
+cd http-rest
 go run main.go -mode=server
 ```
 
 O servidor iniciará na porta padrão `8000` no endereço `localhost`. Para especificar uma porta ou endereço diferentes:
 
 ```bash
-go run main.go -mode=server -address=localhost -port=9000
+go run main.go -mode=server -address=localhost -port=8000
 ```
 
 ### Passo 2: Iniciar o Cliente
 
-Em outro terminal, navegue até o diretório `tcp` e execute:
+Em outro terminal, navegue até o diretório `http-rest` e execute:
 
 ```bash
-cd tcp
+cd http-rest
 go run main.go -mode=client
 ```
 
 O cliente se conectará ao servidor em `localhost:8000`. Para conectar a um servidor diferente:
 
 ```bash
-go run main.go -mode=client -address=localhost -port=9000
+go run main.go -mode=client -address=localhost -port=8000
 ```
 
 ### Uso do Cliente
@@ -78,13 +78,16 @@ Após conectar, digite comandos no terminal do cliente:
 
 **HTTPRequest (Cliente → Servidor):**
 
+Cada requisição HTTP contém um método (INSERT, LOOKUP, UPDATE ou LIST), um path com o termo e, quando aplicável, um corpo com a definição.
+
 ```bash
-METHOD /term\r\n
-Body: definition\r\n
-\r\n
+METHOD /term
+Body: definition (quando aplicável)
 ```
 
 **HTTPResponse (Servidor → Cliente):**
+
+Todas as respostas HTTP seguem o padrão:
 
 ```bash
 <StatusCode> <StatusText>: <Message>
@@ -117,14 +120,14 @@ Para encerrar, pressione `Ctrl+C`
 **Terminal 1 (Servidor):**
 
 ```bash
-cd tcp
+cd http-rest
 go run main.go -mode=server -port=8080
 ```
 
 **Terminal 2 (Cliente):**
 
 ```bash
-cd tcp
+cd http-rest
 go run main.go -mode=client -port=8080
 ```
 
@@ -156,17 +159,20 @@ LIST
 ## Estrutura do Projeto
 
 ```bash
-tcp/
+http-rest/
 ├── main.go           # Ponto de entrada da aplicação
 ├── go.mod            # Gerenciamento de dependências
+├── Dockerfile        # Configuração Docker para containerização
 ├── server/
-│   ├── server.go     # Lógica do servidor
+│   ├── server.go     # Lógica do servidor HTTP REST
 │   ├── config.go     # Configuração do servidor
+│   ├── db.go         # Banco de dados em memória
 │   └── utils.go      # Funções auxiliares do servidor
 ├── client/
-│   ├── client.go     # Lógica do cliente
+│   ├── client.go     # Lógica do cliente HTTP
 │   ├── config.go     # Configuração do cliente
 │   └── utils.go      # Funções auxiliares do cliente
 └── utils/
+    ├── http.go       # Utilitários HTTP e estruturas de requisição/resposta
     └── logger.go     # Sistema de logging
 ```
